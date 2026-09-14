@@ -63,7 +63,7 @@ Use `run --adapter NAME --config FILE` with one of these integrations:
 
 Sift needs local `tokenizer.json` and `model.safetensors` files. Custom commands and pipelines
 must declare model and script files for cache invalidation. HTTP templates require your endpoint,
-index revision, and corpus SHA-256. They are not verified service deployments.
+index revision, and corpus SHA-256.
 Use `headers_env` for credentials, because reports contain configuration.
 
 For a Python adapter, use `--adapter module:factory`. The factory accepts a configuration dictionary
@@ -87,18 +87,13 @@ then descending document ID. Export live rankings with `run --run-output PATH`.
 
 ## Read the results
 
-Reports include rankings, per-query metrics, input hashes, configuration, and measured latencies.
-All judged queries count. Failed runs remain failures and never disappear from an average.
+Reports include rankings, per-query metrics, and latency.
 
 Metrics use [ir_measures definitions](https://ir-measur.es/en/latest/measures.html).
-Default nDCG uses linear gains, unlike version 0.1. Do not compare those graded nDCG values directly.
 Subtopic judgments require diversity metrics.
 
 Latency includes adapter overhead, such as HTTP transport or process startup.
 Saved results provide quality metrics only. HTTP runs cannot measure remote build time or index size.
 Queries, judgments, and rankings must fit in memory. Maximum retrieval depth is 10,000.
-
-[Tests](tests/) cover Sift, SQLite, Terrier, and the integration paths.
-Catalog availability does not mean every dataset and engine combination has been tested.
 
 Apache-2.0. See [LICENSE](LICENSE).
