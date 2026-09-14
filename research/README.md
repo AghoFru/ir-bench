@@ -1,21 +1,9 @@
 # Historical Sift research
 
-These records and the `../reranker` training scripts came from Sift revision
-`df4310b99f736f2c254028a4013b625316b85fd9`. The original Sift Git history retains the old
-evaluation scripts and their invocation details.
+These experiments are not validated baselines. Older evaluators used incorrect
+ideal DCG or omitted failed queries. Remeasure results with the current runner.
 
-`SIFT_RESULTS.md` and `legacy_regression_baseline.json` are historical records. The old
-evaluators computed ideal DCG from retrieved documents and could omit failed queries. Do not
-use their quality values as acceptance thresholds for the corrected runner. Remeasure each
-configuration before making a retrieval-quality claim.
-
-Run training scripts from the IR Bench repository root. Supply dataset paths explicitly with
-the supported command arguments or `SIFT_REGRESSION_DATA`. Keep datasets and generated models
-under `work/`. Training dependencies are optional and are not required by the benchmark runner.
-The Sift product loads the resulting model through its public server interface.
-
-`compositional_m2v.py` and `contextual_composer.py` also moved from the Sift product repository.
-They contain Sift-specific experiments, not general benchmark adapters. Set `SIFT_BIN` to the
-product binary. The contextual experiment also accepts `SIFT_MODEL` and `SIFT_CROSS_ENCODER`.
-Its optional dependencies include NumPy, PyTorch, and Sentence Transformers. Keep experiment
-inputs and outputs under `work/`. These scripts have not been revalidated as current baselines.
+Run scripts from the repository root. Keep datasets, models, and outputs under
+`work/`. Training dependencies are separate from the benchmark installation.
+The composition experiments use `SIFT_BIN`. The contextual experiment also
+accepts `SIFT_MODEL` and `SIFT_CROSS_ENCODER`.
