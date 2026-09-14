@@ -15,6 +15,7 @@ python3 -m venv .venv
 ```
 
 The report contains relevance metrics, query latency, index size, and build time.
+See the [CPU comparison of Sift, BM25, dense models, SPLADE, and Weaviate](results/sift-cpu).
 
 ## Compare systems
 

@@ -1,0 +1,112 @@
+{
+  "datasets": [
+    {
+      "name": "cranfield",
+      "source": "irds:cranfield"
+    },
+    {
+      "name": "scifact",
+      "source": "irds:beir/scifact/test"
+    }
+  ],
+  "engines": [
+    {
+      "name": "bm25",
+      "adapter": "terrier",
+      "config": {
+        "wmodel": "BM25"
+      }
+    },
+    {
+      "name": "e5",
+      "adapter": "dense",
+      "config": {
+        "model": "intfloat/e5-small-v2",
+        "query_prompt": "query: ",
+        "document_prompt": "passage: ",
+        "normalize": true,
+        "revision": "ffb93f3bd4047442299a41ebb6fa998a38507c52"
+      }
+    },
+    {
+      "name": "bge",
+      "adapter": "dense",
+      "config": {
+        "model": "BAAI/bge-small-en-v1.5",
+        "query_prompt": "Represent this sentence for searching relevant passages: ",
+        "document_prompt": "",
+        "normalize": true,
+        "revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a"
+      }
+    },
+    {
+      "name": "splade",
+      "adapter": "splade",
+      "config": {
+        "model": "naver/splade-cocondenser-ensembledistil",
+        "revision": "49cf4c7b0db5b870a401ddf5e2669993ef3699c7"
+      }
+    },
+    {
+      "name": "weaviate-vector",
+      "adapter": "weaviate",
+      "config": {
+        "url": "http://127.0.0.1:8080",
+        "mode": "vector",
+        "encoder": {
+          "model": "intfloat/e5-small-v2",
+          "query_prompt": "query: ",
+          "document_prompt": "passage: ",
+          "revision": "ffb93f3bd4047442299a41ebb6fa998a38507c52"
+        }
+      }
+    },
+    {
+      "name": "weaviate-hybrid",
+      "adapter": "weaviate",
+      "config": {
+        "url": "http://127.0.0.1:8080",
+        "mode": "hybrid",
+        "encoder": {
+          "model": "intfloat/e5-small-v2",
+          "query_prompt": "query: ",
+          "document_prompt": "passage: ",
+          "revision": "ffb93f3bd4047442299a41ebb6fa998a38507c52"
+        }
+      }
+    },
+    {
+      "name": "weaviate-bm25",
+      "adapter": "weaviate",
+      "config": {
+        "url": "http://127.0.0.1:8080",
+        "mode": "bm25",
+        "encoder": {
+          "model": "intfloat/e5-small-v2",
+          "query_prompt": "query: ",
+          "document_prompt": "passage: ",
+          "revision": "ffb93f3bd4047442299a41ebb6fa998a38507c52"
+        }
+      }
+    },
+    {
+      "name": "sift",
+      "adapter": "sift",
+      "config": {
+        "binary": "../sift/target/release/sift",
+        "model": "work/model"
+      }
+    }
+  ],
+  "depth": 100,
+  "measures": [
+    "nDCG@10",
+    "RR@10",
+    "AP@100",
+    "R@100",
+    "Judged@10"
+  ],
+  "warmup": 1,
+  "repeats": 2,
+  "seed": 0
+}
