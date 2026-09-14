@@ -30,15 +30,21 @@ def cache_key(identity):
     return hashlib.sha256(encoded.encode()).hexdigest()
 
 
-def ensure_artifact(engine, corpus: Path, cache: Path):
+def artifact_identity(engine, corpus):
     adapter_source = inspect.getsourcefile(type(engine))
-    identity = {
+    return {
         "corpus_sha256": digest(corpus),
         "engine": getattr(engine, "build_identity", engine.identity)(),
         "adapter_source": digest(Path(adapter_source)) if adapter_source else None,
-        "harness": {path.name: digest(path) for path in sorted(Path(__file__).parent.glob("*.py"))},
-        "cache_format": 1,
+        "build_support": {
+            name: digest(Path(__file__).with_name(name)) for name in ("dataset.py", "neural.py")
+        },
+        "cache_format": 2,
     }
+
+
+def ensure_artifact(engine, corpus: Path, cache: Path):
+    identity = artifact_identity(engine, corpus)
     key = cache_key(identity)
     cache.mkdir(parents=True, exist_ok=True)
     target, lock = cache / key, cache / f"{key}.lock"

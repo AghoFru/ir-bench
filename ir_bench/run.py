@@ -88,13 +88,14 @@ def run(
     # Reject unsupported metrics before building an engine or making service calls.
     evaluate({}, qrels, depth, measures, provider)
     initial_engine = engine.identity()
-    rankings, samples = {}, []
+    rankings, samples, repeat_evaluations = {}, [], []
     randomizer = random.Random(seed)
     with validate_corpus(paths["corpus"], qrels, Path(cache).parent) as (check_ids, count):
         artifact, build = ensure_artifact(engine, paths["corpus"], cache)
         artifacts_before = dict(build["files"])
         with engine.open(artifact) as search:
             for pass_number in range(-warmup, repeats):
+                current_rankings = {}
                 order = query_ids.copy()
                 randomizer.shuffle(order)
                 for query_id in order:
@@ -104,11 +105,8 @@ def run(
                         elapsed = (time.perf_counter_ns() - started) / 1000
                         validate_ranking(hits, depth)
                         check_ids(hits)
-                        if query_id in rankings and rankings[query_id] != hits:
-                            raise ValueError(
-                                "Rankings changed between passes. Resolve this before comparison."
-                            )
-                        rankings[query_id] = hits
+                        if pass_number >= 0:
+                            current_rankings[query_id] = hits
                     except Exception as error:
                         raise RuntimeError(
                             f"Query {query_id} failed: {error}. No aggregate was produced."
@@ -122,6 +120,21 @@ def run(
                                 "hits": len(hits),
                             }
                         )
+                if pass_number == 0:
+                    rankings = current_rankings
+                elif pass_number > 0:
+                    result = evaluate(current_rankings, qrels, depth, measures, provider)
+                    repeat_evaluations.append(
+                        {
+                            "pass": pass_number,
+                            "metrics": result["metrics"],
+                            "ranking_changes": {
+                                query_id: hits
+                                for query_id, hits in current_rankings.items()
+                                if hits != rankings[query_id]
+                            },
+                        }
+                    )
         from .cache import inventory
 
         if inventory(artifact) != artifacts_before:
@@ -160,6 +173,9 @@ def run(
             ),
         ),
         "rankings": rankings,
+        "ranking_pass": 0,
+        "repeat_evaluations": repeat_evaluations,
+        "harness": {path.name: digest(path) for path in sorted(Path(__file__).parent.glob("*.py"))},
     }
 
 

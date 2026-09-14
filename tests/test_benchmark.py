@@ -4,8 +4,11 @@ import json
 import math
 import os
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 
 from ir_measures import Qrel
@@ -199,6 +202,61 @@ class BenchmarkTest(unittest.TestCase):
         (self.dataset / "qrels/test.tsv").write_text("q 0 d299 1\n")
         paged = run(engine, self.dataset, self.work / "cache", depth=250, repeats=2)
         self.assertEqual(len(paged["rankings"]["q"]), 250)
+
+    def test_repeated_rankings_are_scored_without_using_warmup_results(self):
+        class Varying(SQLiteFTS5):
+            @contextmanager
+            def open(self, artifact):
+                calls = 0
+                with super().open(artifact) as actual_search:
+
+                    def search(query, depth):
+                        nonlocal calls
+                        calls += 1
+                        hits = actual_search(query, depth)
+                        return hits if calls % 2 else []
+
+                    yield search
+
+        (self.dataset / "queries.jsonl").write_text(json.dumps({"_id": "q1", "text": "cat"}))
+        (self.dataset / "qrels/test.tsv").write_text("q1 0 cat 1\n")
+        report = run(Varying({}), self.dataset, self.work / "cache", repeats=2, warmup=1)
+        self.assertEqual(report["rankings"], {"q1": []})
+        self.assertEqual(report["ranking_pass"], 0)
+        self.assertEqual(report["metrics"]["R@100"], 0)
+        repeated = report["repeat_evaluations"][0]
+        self.assertEqual(repeated["metrics"]["R@100"], 1)
+        self.assertEqual(repeated["ranking_changes"], {"q1": ["cat"]})
+        self.assertEqual(report["latency"]["samples"], 2)
+
+    def test_evaluator_changes_reuse_indexes_but_reader_changes_rebuild(self):
+        isolated = self.work / "isolated"
+        package = isolated / "ir_bench"
+        shutil.copytree(ROOT / "ir_bench", package, ignore=shutil.ignore_patterns("__pycache__"))
+        program = (
+            "import json,sys; from pathlib import Path; "
+            "from ir_bench.adapters import SQLiteFTS5; from ir_bench.run import run; "
+            "print(json.dumps(run(SQLiteFTS5({}),Path(sys.argv[1]),Path(sys.argv[2]))['build']['cache_hit']))"
+        )
+
+        def cached():
+            result = subprocess.run(
+                [sys.executable, "-c", program, str(self.dataset), str(self.work / "cache")],
+                cwd=isolated,
+                check=True,
+                text=True,
+                capture_output=True,
+                timeout=60,
+            )
+            return json.loads(result.stdout)
+
+        self.assertFalse(cached())
+        with (package / "metrics.py").open("a") as stream:
+            stream.write("\n# Evaluation-only change.\n")
+        self.assertTrue(cached())
+        with (package / "dataset.py").open("a") as stream:
+            stream.write("\n# Input-reader change.\n")
+        self.assertFalse(cached())
 
 
 if __name__ == "__main__":
