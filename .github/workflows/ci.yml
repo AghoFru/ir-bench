@@ -21,3 +21,30 @@ jobs:
         env:
           IR_BENCH_LIVE: '1'
       - run: python -m build --outdir work/dist
+  retrieval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      weaviate:
+        image: cr.weaviate.io/semitechnologies/weaviate:1.39.3
+        ports:
+          - 18087:8080
+        env:
+          AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+          DEFAULT_VECTORIZER_MODULE: none
+          ASYNC_INDEXING: 'false'
+          DISABLE_TELEMETRY: 'true'
+          CLUSTER_HOSTNAME: ir-bench-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: python -m pip install -e '.[neural]'
+      - run: python -m unittest discover -s tests -p test_retrievers.py -v
+        env:
+          IR_BENCH_NEURAL: '1'
+          IR_BENCH_WEAVIATE: http://127.0.0.1:18087
+          OMP_NUM_THREADS: '4'
+          TOKENIZERS_PARALLELISM: 'false'

@@ -9,28 +9,39 @@ Requires Python 3.10 or later. From this checkout:
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install -e .
-.venv/bin/ir-bench run --adapter sqlite --dataset examples/tiny --output work/result.json
+.venv/bin/python -m pip install -e '.[neural]'
+.venv/bin/ir-bench run --adapter dense --config examples/dense-e5.json \
+  --dataset examples/tiny --output work/result.json
 ```
 
 The report contains relevance metrics, query latency, index size, and build time.
 
 ## Compare systems
 
-IR Bench supports Sift, SQLite, Terrier, PyTerrier pipelines, command-line tools,
-and HTTP services. Use datasets from [ir_datasets](https://ir-datasets.com/) or
+Compare BM25, dense retrieval with E5 or BGE, SPLADE, and Weaviate vector or
+hybrid search. Use datasets from [ir_datasets](https://ir-datasets.com/) or
 supply your own using the [example format](examples/tiny).
 
 Choose engines, datasets, and metrics in [matrix.json](examples/matrix.json).
-The example uses Terrier and requires Java 11 or later:
+The BM25 baseline requires Java 11 or later:
 
 ```sh
-.venv/bin/python -m pip install -e '.[terrier]'
+.venv/bin/python -m pip install -e '.[neural,terrier]'
 .venv/bin/ir-bench suite examples/matrix.json --output work/comparison
 ```
 
 Results go into the output directory. Use a new directory for each comparison.
 See [example configurations](examples/) for other integrations.
+
+## Benchmark Weaviate
+
+Start a local Weaviate server and run hybrid search:
+
+```sh
+docker compose -f examples/weaviate.yaml up -d
+.venv/bin/ir-bench run --adapter weaviate --config examples/weaviate-hybrid.json \
+  --dataset irds:cranfield --output work/weaviate.json
+```
 
 ## Evaluate saved rankings
 

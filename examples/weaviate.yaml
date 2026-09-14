@@ -1,0 +1,14 @@
+services:
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.39.3
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      DEFAULT_VECTORIZER_MODULE: none
+      ASYNC_INDEXING: "false"
+      DISABLE_TELEMETRY: "true"
+      CLUSTER_HOSTNAME: ir-bench
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+    volumes:
+      - ../work/weaviate:/var/lib/weaviate

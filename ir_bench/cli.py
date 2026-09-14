@@ -61,6 +61,7 @@ def main(argv=None):
     matrix.add_argument("--output", required=True, type=Path)
     arguments = parser.parse_args(argv)
     work = arguments.work.resolve()
+    os.environ.setdefault("HF_HOME", str(work / "huggingface"))
     os.environ.setdefault("PYTERRIER_HOME", str(work / "pyterrier"))
     os.environ.setdefault("IR_DATASETS_HOME", str(work / "ir-datasets"))
     try:

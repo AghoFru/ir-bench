@@ -17,6 +17,9 @@ from .metrics import evaluate, validate_ranking
 from .trec import read_run
 
 ADAPTERS = {
+    "dense": "ir_bench.neural:Dense",
+    "splade": "ir_bench.neural:Splade",
+    "weaviate": "ir_bench.weaviate:Weaviate",
     "sift": "ir_bench.adapters:Sift",
     "sqlite": "ir_bench.adapters:SQLiteFTS5",
     "command": "ir_bench.bridges:Command",
@@ -142,7 +145,7 @@ def run(
         "build_identity": build["identity"],
         "retrieval_depth": depth,
         "artifact_bytes": None
-        if getattr(engine, "external_index", False)
+        if getattr(engine, "external_index", False) or getattr(engine, "remote_index", False)
         else sum(path.stat().st_size for path in artifact.rglob("*") if path.is_file()),
         **evaluate(rankings, qrels, depth, measures, provider),
         "latency": latency_report(
