@@ -1,0 +1,182 @@
+"""Check metric failures, cache invalidation, and real engine integrations."""
+
+import json
+import math
+import os
+import shutil
+import tempfile
+import unittest
+from pathlib import Path
+
+from ir_bench.adapters import Sift, SQLiteFTS5
+from ir_bench.cache import cache_key, ensure_artifact
+from ir_bench.metrics import evaluate
+from ir_bench.run import run
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class BenchmarkTest(unittest.TestCase):
+    def setUp(self):
+        (ROOT / "work").mkdir(exist_ok=True)
+        self.temporary = tempfile.TemporaryDirectory(dir=ROOT / "work")
+        self.addCleanup(self.temporary.cleanup)
+        self.work = Path(self.temporary.name)
+        self.dataset = self.work / "dataset"
+        shutil.copytree(ROOT / "examples" / "tiny", self.dataset)
+
+    def test_metrics_include_unretrieved_judgments(self):
+        scores = evaluate(["a"], {"a": 1, "b": 1})
+        self.assertAlmostEqual(scores["ndcg_at_10"], 1 / (1 + 1 / math.log2(3)))
+        self.assertEqual(scores["mrr_at_10"], 1)
+        self.assertEqual(scores["recall_at_100"], 0.5)
+        self.assertEqual(evaluate([], {"a": 1})["ndcg_at_10"], 0)
+        self.assertEqual(evaluate(["a"], {"a": 0})["ndcg_at_10"], 0)
+
+    def test_metrics_grades_cutoffs_and_invalid_results(self):
+        scores = evaluate(["b", "a"], {"a": 2, "b": 1})
+        self.assertAlmostEqual(
+            scores["ndcg_at_10"], (1 + 3 / math.log2(3)) / (3 + 1 / math.log2(3))
+        )
+        hits = [str(i) for i in range(11)]
+        self.assertEqual(evaluate(hits, {"10": 1})["mrr_at_10"], 0)
+        for hits, judgments in [(["a", "a"], {"a": 1}), ([None], {}), ([], {"a": -1})]:
+            with self.assertRaises(ValueError):
+                evaluate(hits, judgments)
+        with self.assertRaises(ValueError):
+            evaluate([str(i) for i in range(101)], {})
+
+    def test_sqlite_real_search_and_cache(self):
+        engine = SQLiteFTS5({})
+        report = run(engine, self.dataset, self.work / "cache")
+        self.assertFalse(report["build"]["cache_hit"])
+        self.assertEqual(report["query_count"], 3)
+        self.assertEqual(report["rankings"], {"q1": ["cat"], "q2": ["dog"], "q3": []})
+        self.assertAlmostEqual(report["metrics"]["recall_at_100"], 0.5)
+        second = run(engine, self.dataset, self.work / "cache")
+        self.assertTrue(second["build"]["cache_hit"])
+        self.assertEqual(report["metrics"], second["metrics"])
+        corpus = self.dataset / "corpus.jsonl"
+        corpus.write_text(corpus.read_text().replace("kitten chases", "cat chases"))
+        changed = run(engine, self.dataset, self.work / "cache")
+        self.assertFalse(changed["build"]["cache_hit"])
+        self.assertNotEqual(report["build"]["key"], changed["build"]["key"])
+
+    def test_query_changes_reuse_index_but_change_report_identity(self):
+        engine = SQLiteFTS5({})
+        first = run(engine, self.dataset, self.work / "cache")
+        queries = self.dataset / "queries.jsonl"
+        queries.write_text(queries.read_text().replace('"cat"', '"kitten"'))
+        second = run(engine, self.dataset, self.work / "cache")
+        self.assertTrue(second["build"]["cache_hit"])
+        self.assertNotEqual(first["dataset"], second["dataset"])
+        self.assertEqual(second["rankings"]["q1"], ["kitten"])
+
+    def test_corrupt_artifact_is_rejected(self):
+        engine = SQLiteFTS5({})
+        artifact, _ = ensure_artifact(engine, self.dataset / "corpus.jsonl", self.work / "cache")
+        (artifact / "index.sqlite").write_bytes(b"broken")
+        with self.assertRaisesRegex(ValueError, "damaged"):
+            ensure_artifact(engine, self.dataset / "corpus.jsonl", self.work / "cache")
+
+    def test_failed_build_cleans_stage_and_lock(self):
+        corpus = self.dataset / "corpus.jsonl"
+        corpus.write_text(corpus.read_text() * 2)
+        with self.assertRaises(Exception):
+            ensure_artifact(SQLiteFTS5({}), corpus, self.work / "cache")
+        self.assertEqual(list((self.work / "cache").iterdir()), [])
+
+    def test_failed_query_cannot_disappear_from_average(self):
+        engine = SQLiteFTS5({})
+        original = engine.open
+
+        from contextlib import contextmanager
+
+        @contextmanager
+        def failing_open(artifact):
+            with original(artifact) as search:
+
+                def fail(query, depth):
+                    if query == "dog":
+                        raise RuntimeError("Injected failure.")
+                    return search(query, depth)
+
+                yield fail
+
+        engine.open = failing_open
+        with self.assertRaisesRegex(RuntimeError, "Query q2 failed"):
+            run(engine, self.dataset, self.work / "cache")
+
+    def test_cache_key_preserves_argument_boundaries(self):
+        self.assertNotEqual(cache_key(["a b", "c"]), cache_key(["a", "b c"]))
+
+    def test_changed_inputs_cannot_publish_a_cache_entry(self):
+        engine = SQLiteFTS5({})
+        original = engine.build
+
+        def changing_build(corpus, artifact):
+            original(corpus, artifact)
+            corpus.write_text(corpus.read_text().replace("domestic", "sleepy"))
+
+        engine.build = changing_build
+        with self.assertRaisesRegex(ValueError, "inputs changed"):
+            ensure_artifact(engine, self.dataset / "corpus.jsonl", self.work / "cache")
+        self.assertEqual(list((self.work / "cache").iterdir()), [])
+
+    def test_cache_lock_rejects_a_concurrent_writer(self):
+        engine = SQLiteFTS5({})
+        corpus, cache = self.dataset / "corpus.jsonl", self.work / "cache"
+        _, build = ensure_artifact(engine, corpus, cache)
+        lock = cache / (build["key"] + ".lock")
+        lock.mkdir()
+        with self.assertRaisesRegex(RuntimeError, "locked"):
+            ensure_artifact(engine, corpus, cache)
+        self.assertTrue(lock.is_dir())
+
+    def test_sift_identity_tracks_binary_model_and_build_options(self):
+        binary = self.work / "sift"
+        binary.write_bytes(b"engine-v1")
+        model = self.work / "model"
+        model.mkdir()
+        for name in ("tokenizer.json", "model.safetensors"):
+            (model / name).write_bytes(b"model-v1")
+        config = {"binary": str(binary), "model": str(model)}
+        first = Sift(config).identity()
+        binary.write_bytes(b"engine-v2")
+        second = Sift(config).identity()
+        self.assertNotEqual(first, second)
+        (model / "model.safetensors").write_bytes(b"model-v2")
+        third = Sift(config).identity()
+        self.assertNotEqual(second, third)
+        fourth = Sift({**config, "build_args": ["--k-expand", "0"]}).identity()
+        self.assertNotEqual(third, fourth)
+        self.assertEqual(third, Sift({**config, "query_params": {"blend_alpha": 0.2}}).identity())
+
+    def test_missing_query_is_rejected(self):
+        (self.dataset / "queries.jsonl").write_text(json.dumps({"_id": "q1", "text": "cat"}))
+        with self.assertRaisesRegex(ValueError, "missing queries"):
+            run(SQLiteFTS5({}), self.dataset, self.work / "cache")
+
+    @unittest.skipUnless(
+        os.environ.get("SIFT_BIN") and os.environ.get("SIFT_MODEL"),
+        "Set SIFT_BIN and SIFT_MODEL to run the native Sift integration.",
+    )
+    def test_sift_real_search_and_reuse(self):
+        engine = Sift(
+            {
+                "binary": os.environ["SIFT_BIN"],
+                "model": os.environ["SIFT_MODEL"],
+                "build_args": ["--stop-df", "1.0"],
+            }
+        )
+        report = run(engine, self.dataset, self.work / "cache")
+        self.assertEqual(report["query_count"], 3)
+        self.assertIn("cat", report["rankings"]["q1"])
+        self.assertEqual(report["rankings"]["q2"][0], "dog")
+        second = run(engine, self.dataset, self.work / "cache")
+        self.assertTrue(second["build"]["cache_hit"])
+        self.assertEqual(report["rankings"], second["rankings"])
+
+
+if __name__ == "__main__":
+    unittest.main()

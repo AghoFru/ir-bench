@@ -1,0 +1,23 @@
+[project]
+name = "ir-bench"
+version = "0.1.0"
+description = "Independent retrieval evaluation for local search engines."
+requires-python = ">=3.10"
+license = "Apache-2.0"
+dependencies = []
+
+[project.scripts]
+ir-bench = "ir_bench.run:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ir_bench*"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
