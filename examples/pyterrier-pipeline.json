@@ -1,0 +1,6 @@
+{
+  "factory": "examples.sqlite_pipeline:create",
+  "identity": {"engine": "sqlite-fts5-example-pipeline", "version": 1},
+  "options": {"depth": 100},
+  "files": ["examples/sqlite_pipeline.py"]
+}

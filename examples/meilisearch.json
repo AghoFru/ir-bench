@@ -1,0 +1,12 @@
+{
+  "url": "http://localhost:7700/indexes/documents/search",
+  "identity": {
+    "engine": "meilisearch",
+    "revision": "REPLACE_WITH_ENGINE_VERSION_AND_INDEX_REVISION",
+    "corpus_sha256": "REPLACE_WITH_CORPUS_SHA256"
+  },
+  "request": {"q": "{query}", "limit": "{depth}", "attributesToRetrieve": ["id"]},
+  "hits_path": "hits",
+  "id_field": "id",
+  "headers_env": {"Authorization": "IR_BENCH_AUTHORIZATION"}
+}

@@ -1,0 +1,15 @@
+{
+  "url": "http://localhost:9200/documents/_search?request_cache=false",
+  "identity": {
+    "engine": "elasticsearch",
+    "revision": "REPLACE_WITH_ENGINE_VERSION_AND_INDEX_REVISION",
+    "corpus_sha256": "REPLACE_WITH_CORPUS_SHA256"
+  },
+  "request": {
+    "query": {"multi_match": {"query": "{query}", "fields": ["title^2", "text"]}},
+    "size": "{depth}",
+    "_source": false
+  },
+  "hits_path": "hits.hits",
+  "id_field": "_id"
+}

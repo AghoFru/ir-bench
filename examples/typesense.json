@@ -1,0 +1,15 @@
+{
+  "url": "http://localhost:8108/multi_search",
+  "identity": {
+    "engine": "typesense",
+    "revision": "REPLACE_WITH_ENGINE_VERSION_AND_INDEX_REVISION",
+    "corpus_sha256": "REPLACE_WITH_CORPUS_SHA256"
+  },
+  "request": {
+    "searches": [{"collection": "documents", "q": "{query}",
+                  "query_by": "title,text", "per_page": "{depth}"}]
+  },
+  "hits_path": "results.0.hits",
+  "id_field": "document.id",
+  "headers_env": {"X-TYPESENSE-API-KEY": "IR_BENCH_API_KEY"}
+}

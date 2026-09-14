@@ -1,6 +1,7 @@
 """Cache successful builds by their inputs and verify artifact contents."""
 
 import hashlib
+import inspect
 import json
 import shutil
 import tempfile
@@ -30,9 +31,11 @@ def cache_key(identity):
 
 
 def ensure_artifact(engine, corpus: Path, cache: Path):
+    adapter_source = inspect.getsourcefile(type(engine))
     identity = {
         "corpus_sha256": digest(corpus),
-        "engine": engine.identity(),
+        "engine": getattr(engine, "build_identity", engine.identity)(),
+        "adapter_source": digest(Path(adapter_source)) if adapter_source else None,
         "harness": {path.name: digest(path) for path in sorted(Path(__file__).parent.glob("*.py"))},
         "cache_format": 1,
     }
@@ -63,7 +66,7 @@ def ensure_artifact(engine, corpus: Path, cache: Path):
             elapsed = time.perf_counter() - started
             if (
                 digest(corpus) != identity["corpus_sha256"]
-                or engine.identity() != identity["engine"]
+                or getattr(engine, "build_identity", engine.identity)() != identity["engine"]
             ):
                 raise ValueError("Build inputs changed while the index was built.")
             files = inventory(artifact)

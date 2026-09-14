@@ -1,2 +1,2 @@
-recursive-include examples *.jsonl *.tsv
+recursive-include examples *.json *.jsonl *.tsv *.py
 prune work

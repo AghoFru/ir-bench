@@ -8,12 +8,20 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from ir_measures import Qrel
+
 from ir_bench.adapters import Sift, SQLiteFTS5
 from ir_bench.cache import cache_key, ensure_artifact
-from ir_bench.metrics import evaluate
+from ir_bench.metrics import evaluate as evaluate_run
 from ir_bench.run import run
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def evaluate(hits, judgments, depth=100):
+    return evaluate_run(
+        {"q": hits}, [Qrel("q", doc, grade) for doc, grade in judgments.items()], depth
+    )["metrics"]
 
 
 class BenchmarkTest(unittest.TestCase):
@@ -27,24 +35,22 @@ class BenchmarkTest(unittest.TestCase):
 
     def test_metrics_include_unretrieved_judgments(self):
         scores = evaluate(["a"], {"a": 1, "b": 1})
-        self.assertAlmostEqual(scores["ndcg_at_10"], 1 / (1 + 1 / math.log2(3)))
-        self.assertEqual(scores["mrr_at_10"], 1)
-        self.assertEqual(scores["recall_at_100"], 0.5)
-        self.assertEqual(evaluate([], {"a": 1})["ndcg_at_10"], 0)
-        self.assertEqual(evaluate(["a"], {"a": 0})["ndcg_at_10"], 0)
+        self.assertAlmostEqual(scores["nDCG@10"], 1 / (1 + 1 / math.log2(3)))
+        self.assertEqual(scores["RR@10"], 1)
+        self.assertEqual(scores["R@100"], 0.5)
+        self.assertEqual(evaluate([], {"a": 1})["nDCG@10"], 0)
+        self.assertEqual(evaluate(["a"], {"a": 0})["nDCG@10"], 0)
 
     def test_metrics_grades_cutoffs_and_invalid_results(self):
         scores = evaluate(["b", "a"], {"a": 2, "b": 1})
-        self.assertAlmostEqual(
-            scores["ndcg_at_10"], (1 + 3 / math.log2(3)) / (3 + 1 / math.log2(3))
-        )
+        self.assertAlmostEqual(scores["nDCG@10"], (1 + 2 / math.log2(3)) / (2 + 1 / math.log2(3)))
         hits = [str(i) for i in range(11)]
-        self.assertEqual(evaluate(hits, {"10": 1})["mrr_at_10"], 0)
-        for hits, judgments in [(["a", "a"], {"a": 1}), ([None], {}), ([], {"a": -1})]:
+        self.assertEqual(evaluate(hits, {"10": 1})["RR@10"], 0)
+        for hits, judgments in [(["a", "a"], {"a": 1}), ([None], {"a": 1}), ([], {"a": 1.5})]:
             with self.assertRaises(ValueError):
                 evaluate(hits, judgments)
         with self.assertRaises(ValueError):
-            evaluate([str(i) for i in range(101)], {})
+            evaluate([str(i) for i in range(101)], {"a": 1})
 
     def test_sqlite_real_search_and_cache(self):
         engine = SQLiteFTS5({})
@@ -52,7 +58,7 @@ class BenchmarkTest(unittest.TestCase):
         self.assertFalse(report["build"]["cache_hit"])
         self.assertEqual(report["query_count"], 3)
         self.assertEqual(report["rankings"], {"q1": ["cat"], "q2": ["dog"], "q3": []})
-        self.assertAlmostEqual(report["metrics"]["recall_at_100"], 0.5)
+        self.assertAlmostEqual(report["metrics"]["R@100"], 0.5)
         second = run(engine, self.dataset, self.work / "cache")
         self.assertTrue(second["build"]["cache_hit"])
         self.assertEqual(report["metrics"], second["metrics"])
@@ -150,7 +156,9 @@ class BenchmarkTest(unittest.TestCase):
         self.assertNotEqual(second, third)
         fourth = Sift({**config, "build_args": ["--k-expand", "0"]}).identity()
         self.assertNotEqual(third, fourth)
-        self.assertEqual(third, Sift({**config, "query_params": {"blend_alpha": 0.2}}).identity())
+        changed = Sift({**config, "query_params": {"blend_alpha": 0.2}})
+        self.assertNotEqual(third, changed.identity())
+        self.assertEqual(Sift(config).build_identity(), changed.build_identity())
 
     def test_missing_query_is_rejected(self):
         (self.dataset / "queries.jsonl").write_text(json.dumps({"_id": "q1", "text": "cat"}))
@@ -176,6 +184,21 @@ class BenchmarkTest(unittest.TestCase):
         second = run(engine, self.dataset, self.work / "cache")
         self.assertTrue(second["build"]["cache_hit"])
         self.assertEqual(report["rankings"], second["rankings"])
+        engine.query_params = {"blend_alpha": 0.2}
+        changed = run(engine, self.dataset, self.work / "cache")
+        self.assertTrue(changed["build"]["cache_hit"])
+        self.assertNotEqual(report["engine"], changed["engine"])
+
+        (self.dataset / "corpus.jsonl").write_text(
+            "".join(
+                json.dumps({"_id": f"d{number:03}", "text": "cat " * (number + 1)}) + "\n"
+                for number in range(300)
+            )
+        )
+        (self.dataset / "queries.jsonl").write_text(json.dumps({"_id": "q", "text": "cat"}) + "\n")
+        (self.dataset / "qrels/test.tsv").write_text("q 0 d299 1\n")
+        paged = run(engine, self.dataset, self.work / "cache", depth=250, repeats=2)
+        self.assertEqual(len(paged["rankings"]["q"]), 250)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,17 @@
+{
+  "datasets": [
+    {"name": "tiny", "source": "examples/tiny"},
+    {"name": "cranfield", "source": "irds:cranfield"}
+  ],
+  "engines": [
+    {"name": "sqlite", "adapter": "sqlite"},
+    {"name": "bm25", "adapter": "terrier", "config": {"wmodel": "BM25"}},
+    {"name": "dph", "adapter": "terrier", "config": {"wmodel": "DPH"}},
+    {"name": "pl2", "adapter": "terrier", "config": {"wmodel": "PL2"}}
+  ],
+  "depth": 100,
+  "measures": ["nDCG@10", "RR@10", "AP@100", "R@100", "Judged@10"],
+  "warmup": 1,
+  "repeats": 3,
+  "seed": 0
+}

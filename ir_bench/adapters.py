@@ -78,11 +78,14 @@ class Sift:
             )
         if (
             not isinstance(self.query_params, dict)
-            or {"index", "q", "k", "cache", "with_payload"} & self.query_params.keys()
+            or {"index", "q", "k", "offset", "cache", "with_payload"} & self.query_params.keys()
         ):
             raise ValueError("Query parameters cannot override benchmark request fields.")
 
     def identity(self):
+        return {**self.build_identity(), "query_params": self.query_params}
+
+    def build_identity(self):
         return {
             "engine": "sift",
             "binary_sha256": digest(self.binary),
@@ -162,26 +165,30 @@ class Sift:
                 raise RuntimeError("Sift did not become ready within the startup budget.")
 
             def search(query, depth):
-                if depth > 200:
-                    raise ValueError("The Sift HTTP API supports at most 200 hits per request.")
                 body = {
                     **self.query_params,
                     "index": "docs",
                     "q": query,
-                    "k": depth,
                     "cache": False,
                     "with_payload": False,
                 }
-                req = request.Request(
-                    base + "/search",
-                    data=json.dumps(body).encode(),
-                    headers={"content-type": "application/json"},
-                )
-                with request.urlopen(req, timeout=60) as response:
-                    raw = response.read(16 * 1024 * 1024 + 1)
-                if len(raw) > 16 * 1024 * 1024:
-                    raise ValueError("Sift response exceeds 16 MiB.")
-                return [hit["doc_id"] for hit in json.loads(raw)["hits"]]
+                found = []
+                for offset in range(0, depth, 200):
+                    size = min(200, depth - offset)
+                    req = request.Request(
+                        base + "/search",
+                        data=json.dumps({**body, "k": size, "offset": offset}).encode(),
+                        headers={"content-type": "application/json"},
+                    )
+                    with request.urlopen(req, timeout=60) as response:
+                        raw = response.read(16 * 1024 * 1024 + 1)
+                    if len(raw) > 16 * 1024 * 1024:
+                        raise ValueError("Sift response exceeds 16 MiB.")
+                    page = [hit["doc_id"] for hit in json.loads(raw)["hits"]]
+                    found.extend(page)
+                    if len(page) < size:
+                        break
+                return found
 
             yield search
         finally:

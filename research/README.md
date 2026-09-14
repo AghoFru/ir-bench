@@ -13,3 +13,9 @@ Run training scripts from the IR Bench repository root. Supply dataset paths exp
 the supported command arguments or `SIFT_REGRESSION_DATA`. Keep datasets and generated models
 under `work/`. Training dependencies are optional and are not required by the benchmark runner.
 The Sift product loads the resulting model through its public server interface.
+
+`compositional_m2v.py` and `contextual_composer.py` also moved from the Sift product repository.
+They contain Sift-specific experiments, not general benchmark adapters. Set `SIFT_BIN` to the
+product binary. The contextual experiment also accepts `SIFT_MODEL` and `SIFT_CROSS_ENCODER`.
+Its optional dependencies include NumPy, PyTorch, and Sentence Transformers. Keep experiment
+inputs and outputs under `work/`. These scripts have not been revalidated as current baselines.
