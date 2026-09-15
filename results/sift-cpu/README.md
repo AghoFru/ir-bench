@@ -10,31 +10,31 @@ The p50 column shows median latency. The p95 column covers 95% of measured queri
 
 1,400 documents and 225 queries.
 
-| System | nDCG@10 | Recall@100 | p50 latency | p95 latency |
-|---|---:|---:|---:|---:|
-| Sift | 0.349 | 0.739 | 0.80 ms | 1.00 ms |
-| BM25 (Terrier) | 0.343 | 0.745 | 4.25 ms | 5.20 ms |
-| E5-small-v2 | 0.344 | 0.769 | 13.95 ms | 16.28 ms |
-| BGE-small-en-v1.5 | 0.359 | 0.776 | 14.42 ms | 16.85 ms |
-| SPLADE | 0.359 | 0.775 | 37.50 ms | 43.08 ms |
-| Weaviate vector (E5) | 0.344 | 0.769 | 19.78 ms | 22.75 ms |
-| Weaviate hybrid (E5 + BM25) | 0.370 | 0.768 | 20.46 ms | 23.63 ms |
-| Weaviate BM25 | 0.322 | 0.705 | 3.46 ms | 4.45 ms |
+| System | nDCG@10 | Recall@100 | p50 latency | p95 latency | Ingestion |
+|---|---:|---:|---:|---:|---:|
+| Sift | 0.349 | 0.739 | 0.80 ms | 1.00 ms | 0.75 s |
+| BM25 (Terrier) | 0.343 | 0.745 | 4.25 ms | 5.20 ms | 1.12 s |
+| E5-small-v2 | 0.344 | 0.769 | 13.95 ms | 16.28 ms | 50.49 s |
+| BGE-small-en-v1.5 | 0.359 | 0.776 | 14.42 ms | 16.85 ms | 46.09 s |
+| SPLADE | 0.359 | 0.775 | 37.50 ms | 43.08 ms | 106.25 s |
+| Weaviate vector (E5) | 0.344 | 0.769 | 19.78 ms | 22.75 ms | 46.22 s |
+| Weaviate hybrid (E5 + BM25) | 0.370 | 0.768 | 20.46 ms | 23.63 ms | 46.22 s |
+| Weaviate BM25 | 0.322 | 0.705 | 3.46 ms | 4.45 ms | 46.22 s |
 
 ## SciFact
 
 5,183 documents and 300 queries.
 
-| System | nDCG@10 | Recall@100 | p50 latency | p95 latency |
-|---|---:|---:|---:|---:|
-| Sift | 0.696 | 0.926 | 0.75 ms | 1.01 ms |
-| BM25 (Terrier) | 0.684 | 0.926 | 4.20 ms | 4.90 ms |
-| E5-small-v2 | 0.687 | 0.928 | 14.46 ms | 17.05 ms |
-| BGE-small-en-v1.5 | 0.713 | 0.942 | 15.17 ms | 17.33 ms |
-| SPLADE | 0.708 | 0.949 | 37.41 ms | 42.95 ms |
-| Weaviate vector (E5) | 0.688 | 0.928 | 20.34 ms | 23.10 ms |
-| Weaviate hybrid (E5 + BM25) | 0.723 | 0.955 | 20.82 ms | 23.58 ms |
-| Weaviate BM25 | 0.667 | 0.883 | 3.49 ms | 5.20 ms |
+| System | nDCG@10 | Recall@100 | p50 latency | p95 latency | Ingestion |
+|---|---:|---:|---:|---:|---:|
+| Sift | 0.696 | 0.926 | 0.75 ms | 1.01 ms | 2.72 s |
+| BM25 (Terrier) | 0.684 | 0.926 | 4.20 ms | 4.90 ms | 1.49 s |
+| E5-small-v2 | 0.687 | 0.928 | 14.46 ms | 17.05 ms | 187.81 s |
+| BGE-small-en-v1.5 | 0.713 | 0.942 | 15.17 ms | 17.33 ms | 175.42 s |
+| SPLADE | 0.708 | 0.949 | 37.41 ms | 42.95 ms | 379.67 s |
+| Weaviate vector (E5) | 0.688 | 0.928 | 20.34 ms | 23.10 ms | 176.18 s |
+| Weaviate hybrid (E5 + BM25) | 0.723 | 0.955 | 20.82 ms | 23.58 ms | 176.18 s |
+| Weaviate BM25 | 0.667 | 0.883 | 3.49 ms | 5.20 ms | 176.18 s |
 
 ## Test settings
 
@@ -49,6 +49,9 @@ The p50 column shows median latency. The p95 column covers 95% of measured queri
   Weaviate used HNSW, with E5 vectors shared across all three modes.
 - Neural encoders used four CPU threads. Sift used its default thread settings.
   Model names, revisions, prompts, and index settings are in [matrix.json](matrix.json).
+- Ingestion is one full index build, including document encoding and index writes.
+  Dataset and model files were already local. Cache hits report the original build time.
+  All three Weaviate modes share the same vector-enabled build and its ingestion time.
 
 Latency includes query encoding and each adapter call. Sift and Weaviate include local
 HTTP transport. Terrier includes Python and Java overhead. FAISS and SPLADE run in process.
