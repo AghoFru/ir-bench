@@ -13,7 +13,7 @@ from pathlib import Path
 
 from .cache import digest, ensure_artifact
 from .dataset import dataset_paths, load_qrels, load_queries, validate_corpus
-from .metrics import evaluate, validate_ranking
+from .metrics import evaluate, remove_self_matches, validate_ranking
 from .trec import read_run
 
 ADAPTERS = {
@@ -55,7 +55,7 @@ def latency_report(samples, repeats, warmup, seed, boundary):
         "query_order_seed": seed,
         "samples": len(samples),
         "mean_us": statistics.mean(ordered),
-        "p50_us": ordered[math.ceil(len(ordered) * 0.5) - 1],
+        "p50_us": statistics.median(ordered),
         "p95_us": ordered[math.ceil(len(ordered) * 0.95) - 1],
         "p99_us": ordered[math.ceil(len(ordered) * 0.99) - 1],
         "stdev_us": statistics.stdev(ordered) if len(ordered) > 1 else 0.0,
@@ -75,9 +75,12 @@ def run(
     repeats=1,
     warmup=0,
     seed=0,
+    exclude_self_matches=False,
 ):
     if not 1 <= repeats <= 100 or not 0 <= warmup <= 10:
         raise ValueError("Use 1 through 100 measured passes and 0 through 10 warmup passes.")
+    if type(exclude_self_matches) is not bool:
+        raise ValueError("exclude_self_matches must be true or false.")
     paths = dataset_paths(dataset, split)
     initial = {name: digest(path) for name, path in paths.items()}
     queries, qrels = load_queries(paths["queries"]), load_qrels(paths["qrels"])
@@ -120,6 +123,8 @@ def run(
                                 "hits": len(hits),
                             }
                         )
+                if exclude_self_matches:
+                    current_rankings = remove_self_matches(current_rankings)
                 if pass_number == 0:
                     rankings = current_rankings
                 elif pass_number > 0:
@@ -174,14 +179,21 @@ def run(
         ),
         "rankings": rankings,
         "ranking_pass": 0,
+        "exclude_self_matches": exclude_self_matches,
         "repeat_evaluations": repeat_evaluations,
         "harness": {path.name: digest(path) for path in sorted(Path(__file__).parent.glob("*.py"))},
     }
 
 
-def evaluate_file(run_file, qrels_file, depth=100, measures=None, provider=None):
+def evaluate_file(
+    run_file, qrels_file, depth=100, measures=None, provider=None, *, exclude_self_matches=False
+):
+    if type(exclude_self_matches) is not bool:
+        raise ValueError("exclude_self_matches must be true or false.")
     initial = {"run": digest(run_file), "qrels": digest(qrels_file)}
     qrels, rankings = load_qrels(qrels_file), read_run(run_file, depth)
+    if exclude_self_matches:
+        rankings = remove_self_matches(rankings)
     result = evaluate(rankings, qrels, depth, measures, provider)
     if {"run": digest(run_file), "qrels": digest(qrels_file)} != initial:
         raise ValueError("Evaluation inputs changed while they were read.")
@@ -190,6 +202,7 @@ def evaluate_file(run_file, qrels_file, depth=100, measures=None, provider=None)
         "input_files": initial,
         "retrieval_depth": depth,
         "ordering": "score descending, then document ID descending, rank column ignored",
+        "exclude_self_matches": exclude_self_matches,
         "build": None,
         "latency": None,
         "artifact_bytes": None,

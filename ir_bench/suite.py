@@ -1,6 +1,8 @@
 """Run explicit dataset and engine matrices and retain every failure."""
 
+import json
 import re
+import statistics
 from pathlib import Path
 
 from .catalog import prepare
@@ -9,7 +11,17 @@ from .run import evaluate_file, load_engine, run, write_report
 
 
 def run_suite(config, work, output):
-    allowed = {"datasets", "engines", "depth", "measures", "provider", "repeats", "warmup", "seed"}
+    allowed = {
+        "datasets",
+        "engines",
+        "depth",
+        "measures",
+        "provider",
+        "repeats",
+        "warmup",
+        "seed",
+        "exclude_self_matches",
+    }
     if set(config) - allowed:
         raise ValueError("Unknown suite configuration field.")
     datasets, engines = config["datasets"], config["engines"]
@@ -60,12 +72,21 @@ def run_suite(config, work, output):
                         config.get("depth", 100),
                         config.get("measures"),
                         config.get("provider"),
+                        exclude_self_matches=config.get("exclude_self_matches", False),
                     )
                 else:
                     engine = load_engine(engine_config["adapter"], engine_config.get("config", {}))
                     options = {
                         key: config[key]
-                        for key in ("depth", "measures", "provider", "repeats", "warmup", "seed")
+                        for key in (
+                            "depth",
+                            "measures",
+                            "provider",
+                            "repeats",
+                            "warmup",
+                            "seed",
+                            "exclude_self_matches",
+                        )
                         if key in config
                     }
                     report = run(engine, dataset, work / "cache", split=split, **options)
@@ -79,5 +100,43 @@ def run_suite(config, work, output):
             print(f"{row['dataset']} / {row['engine']}: {row['status']}", flush=True)
             write_report(output / "suite.json", summary)
     summary["complete"] = all(row["status"] == "success" for row in summary["results"])
+    summary["dataset_medians"] = dataset_medians(summary, output)
     write_report(output / "suite.json", summary)
     return 0 if summary["complete"] else 1
+
+
+def dataset_medians(summary, output):
+    if not summary["complete"]:
+        return None
+    datasets = [entry["name"] for entry in summary["configuration"]["datasets"]]
+    engines = [entry["name"] for entry in summary["configuration"]["engines"]]
+    expected = {(dataset, engine) for dataset in datasets for engine in engines}
+    found = {(row["dataset"], row["engine"]) for row in summary["results"]}
+    if found != expected or len(summary["results"]) != len(expected):
+        raise ValueError("Dataset medians require one result for every dataset and system.")
+    medians = {}
+    for engine in engines:
+        reports = []
+        for row in summary["results"]:
+            if row["engine"] == engine:
+                if row["status"] != "success":
+                    raise ValueError("Dataset medians require every comparison to succeed.")
+                reports.append(json.loads((Path(output) / row["report"]).read_text()))
+        measures = set(reports[0]["metrics"])
+        if any(set(report["metrics"]) != measures for report in reports):
+            raise ValueError("Dataset medians require the same measures for every dataset.")
+        medians[engine] = {
+            "metrics": {
+                measure: statistics.median(report["metrics"][measure] for report in reports)
+                for measure in sorted(measures)
+            },
+            "p50_us": statistics.median(report["latency"]["p50_us"] for report in reports)
+            if all(report["latency"] is not None for report in reports)
+            else None,
+            "ingestion_seconds": statistics.median(
+                report["build"]["build_seconds"] for report in reports
+            )
+            if all(report["build"] is not None for report in reports)
+            else None,
+        }
+    return {"datasets": datasets, "weighting": "equal per dataset", "engines": medians}

@@ -23,7 +23,7 @@ from ir_bench.catalog import catalog, prepare, text_fields
 from ir_bench.dataset import dataset_paths, load_qrels
 from ir_bench.metrics import evaluate
 from ir_bench.run import evaluate_file, run, write_report
-from ir_bench.suite import run_suite
+from ir_bench.suite import dataset_medians, run_suite
 from ir_bench.trec import read_run, write_run
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -207,9 +207,59 @@ class InterchangeTest(unittest.TestCase):
         self.assertEqual(run_suite(config, self.work, output), 1)
         report = json.loads((output / "suite.json").read_text())
         self.assertFalse(report["complete"])
+        self.assertIsNone(report["dataset_medians"])
         self.assertEqual([row["status"] for row in report["results"]], ["success", "failed"])
         with self.assertRaisesRegex(ValueError, "empty"):
             run_suite(config, self.work, output)
+
+    def test_dataset_medians_give_each_dataset_equal_weight(self):
+        summary = {
+            "complete": True,
+            "configuration": {
+                "datasets": [{"name": name} for name in ("a", "b", "c")],
+                "engines": [{"name": "system"}],
+            },
+            "results": [],
+        }
+        for name, score, latency, count in [
+            ("a", 0.1, 1, 1000),
+            ("b", 0.5, 10, 1),
+            ("c", 0.9, 100, 1),
+        ]:
+            filename = name + ".json"
+            write_report(
+                self.work / filename,
+                {
+                    "metrics": {"nDCG@10": score},
+                    "query_count": count,
+                    "latency": {"p50_us": latency},
+                    "build": {"build_seconds": latency * 2},
+                },
+            )
+            summary["results"].append(
+                {
+                    "dataset": name,
+                    "engine": "system",
+                    "status": "success",
+                    "report": filename,
+                }
+            )
+        result = dataset_medians(summary, self.work)
+        self.assertEqual(result["datasets"], ["a", "b", "c"])
+        self.assertEqual(
+            result["engines"]["system"],
+            {
+                "metrics": {"nDCG@10": 0.5},
+                "p50_us": 10,
+                "ingestion_seconds": 20,
+            },
+        )
+        summary["configuration"]["datasets"].pop()
+        summary["results"].pop()
+        self.assertEqual(dataset_medians(summary, self.work)["engines"]["system"]["p50_us"], 5.5)
+        summary["results"].pop()
+        with self.assertRaisesRegex(ValueError, "every dataset"):
+            dataset_medians(summary, self.work)
 
     def test_atomic_report_does_not_replace_a_valid_report_with_invalid_values(self):
         path = self.work / "report.json"

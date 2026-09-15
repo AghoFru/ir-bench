@@ -16,7 +16,8 @@ from ir_measures import Qrel
 from ir_bench.adapters import Sift, SQLiteFTS5
 from ir_bench.cache import cache_key, ensure_artifact
 from ir_bench.metrics import evaluate as evaluate_run
-from ir_bench.run import run
+from ir_bench.run import evaluate_file, latency_report, run
+from ir_bench.trec import write_run
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -35,6 +36,10 @@ class BenchmarkTest(unittest.TestCase):
         self.work = Path(self.temporary.name)
         self.dataset = self.work / "dataset"
         shutil.copytree(ROOT / "examples" / "tiny", self.dataset)
+
+    def test_latency_median_averages_the_two_middle_samples(self):
+        samples = [{"latency_us": value} for value in (9, 1)]
+        self.assertEqual(latency_report(samples, 1, 0, 0, "test")["p50_us"], 5)
 
     def test_metrics_include_unretrieved_judgments(self):
         scores = evaluate(["a"], {"a": 1, "b": 1})
@@ -80,6 +85,38 @@ class BenchmarkTest(unittest.TestCase):
         self.assertTrue(second["build"]["cache_hit"])
         self.assertNotEqual(first["dataset"], second["dataset"])
         self.assertEqual(second["rankings"]["q1"], ["kitten"])
+
+    def test_self_match_exclusion_preserves_cache_and_saved_run_metrics(self):
+        corpus = [{"_id": doc, "text": "cat"} for doc in ("cat", "kitten")]
+        (self.dataset / "corpus.jsonl").write_text("\n".join(map(json.dumps, corpus)))
+        (self.dataset / "queries.jsonl").write_text(json.dumps({"_id": "cat", "text": "cat"}))
+        qrels = self.dataset / "qrels/test.tsv"
+        qrels.write_text("cat 0 kitten 1\n")
+        cache = self.work / "cache"
+        original = run(SQLiteFTS5({}), self.dataset, cache)
+        self.assertEqual(original["rankings"], {"cat": ["cat", "kitten"]})
+        filtered = run(SQLiteFTS5({}), self.dataset, cache, exclude_self_matches=True, repeats=2)
+        self.assertEqual(filtered["rankings"], {"cat": ["kitten"]})
+        self.assertEqual(filtered["metrics"]["nDCG@10"], 1)
+        self.assertTrue(filtered["build"]["cache_hit"])
+        self.assertEqual(filtered["repeat_evaluations"][0]["metrics"], filtered["metrics"])
+        saved = self.work / "results.trec"
+        write_run(saved, original["rankings"])
+        self.assertEqual(
+            evaluate_file(saved, qrels, exclude_self_matches=True)["metrics"], filtered["metrics"]
+        )
+        empty = run(
+            SQLiteFTS5({}),
+            self.dataset,
+            cache,
+            depth=1,
+            measures=["nDCG@1"],
+            exclude_self_matches=True,
+        )
+        self.assertEqual(empty["rankings"], {"cat": []})
+        self.assertEqual(empty["metrics"]["nDCG@1"], 0)
+        with self.assertRaisesRegex(ValueError, "true or false"):
+            run(SQLiteFTS5({}), self.dataset, cache, exclude_self_matches="false")
 
     def test_corrupt_artifact_is_rejected(self):
         engine = SQLiteFTS5({})

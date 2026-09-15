@@ -15,6 +15,11 @@ def evaluation_options(parser):
     parser.add_argument("--depth", type=int, default=100)
     parser.add_argument("--measure", action="append", dest="measures")
     parser.add_argument(
+        "--exclude-self-matches",
+        action="store_true",
+        help="Exclude results whose document ID equals the query ID, as in BEIR.",
+    )
+    parser.add_argument(
         "--provider", help="Explicit ir_measures provider, or its default provider chain."
     )
 
@@ -85,6 +90,7 @@ def main(argv=None):
                 repeats=arguments.repeats,
                 warmup=arguments.warmup,
                 seed=arguments.seed,
+                exclude_self_matches=arguments.exclude_self_matches,
             )
             report["configuration"] = config
             report["dataset_source"] = arguments.dataset
@@ -100,6 +106,7 @@ def main(argv=None):
                 arguments.depth,
                 arguments.measures,
                 arguments.provider,
+                exclude_self_matches=arguments.exclude_self_matches,
             )
             write_report(arguments.output, report)
             print(json.dumps(report["metrics"], indent=2))

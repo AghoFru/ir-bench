@@ -17,6 +17,10 @@ def validate_ranking(hits, depth):
         raise ValueError("The engine returned duplicate document identifiers.")
 
 
+def remove_self_matches(rankings):
+    return {query: [doc for doc in hits if doc != query] for query, hits in rankings.items()}
+
+
 def evaluate(rankings, qrels, depth=100, measures=None, provider=None):
     if not 1 <= depth <= 10000:
         raise ValueError("Retrieval depth must be from 1 through 10000.")
