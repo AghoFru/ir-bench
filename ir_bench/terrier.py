@@ -4,6 +4,7 @@ import importlib
 import importlib.metadata
 import inspect
 import math
+from collections import Counter
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -27,10 +28,12 @@ class Terrier:
             "pyterrier": importlib.metadata.version("pyterrier"),
             "terrier": pt.terrier.version(),
             "configuration": self.config,
+            "query_input": "plain text",
         }
 
     def build_identity(self):
         identity = self.identity()
+        identity.pop("query_input")
         identity["configuration"] = {
             key: value for key, value in self.config.items() if key not in {"wmodel", "controls"}
         }
@@ -63,7 +66,11 @@ class Terrier:
 
         def search(query, depth):
             retriever.controls["end"] = str(depth - 1)
-            result = retriever.transform(pd.DataFrame([{"qid": "query", "query": query}]))
+            # Dataset text must not activate Terrier query operators or controls.
+            tokens = dict(Counter(retriever.tokeniser.getTokens(query)))
+            if not tokens:
+                return []
+            result = retriever.transform(pd.DataFrame([{"qid": "query", "query_toks": tokens}]))
             if not all(math.isfinite(value) for value in result["score"]):
                 raise ValueError("Terrier returned nonfinite scores.")
             # Preserve deterministic TREC score ordering rather than implementation tie order.

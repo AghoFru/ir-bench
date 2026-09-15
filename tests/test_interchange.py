@@ -18,7 +18,7 @@ import pytrec_eval
 
 from ir_bench.adapters import SQLiteFTS5
 from ir_bench.bridges import HTTP, Command
-from ir_bench.cache import digest
+from ir_bench.cache import digest, ensure_artifact
 from ir_bench.catalog import catalog, prepare, text_fields
 from ir_bench.dataset import dataset_paths, load_qrels
 from ir_bench.metrics import evaluate
@@ -267,6 +267,19 @@ class InterchangeTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             write_report(path, {"value": float("nan")})
         self.assertEqual(json.loads(path.read_text()), {"value": 1})
+
+    @unittest.skipUnless(
+        os.environ.get("IR_BENCH_LIVE"), "Set IR_BENCH_LIVE=1 for catalog and Java checks."
+    )
+    def test_terrier_treats_query_operators_as_plain_text(self):
+        from ir_bench.terrier import Terrier
+
+        engine = Terrier({"wmodel": "BM25"})
+        artifact, _ = ensure_artifact(engine, self.dataset / "corpus.jsonl", self.work / "cache")
+        with engine.open(artifact) as search:
+            for query in ("cat: kitten", "#combine(cat kitten)", "applypipeline:off cat"):
+                self.assertIn("cat", search(query, 100))
+            self.assertEqual(search("!!!", 100), [])
 
     @unittest.skipUnless(
         os.environ.get("IR_BENCH_LIVE"), "Set IR_BENCH_LIVE=1 for catalog and Java checks."
