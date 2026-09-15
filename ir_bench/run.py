@@ -76,11 +76,15 @@ def run(
     warmup=0,
     seed=0,
     exclude_self_matches=False,
+    expected_missing_qrel_docs=(),
 ):
     if not 1 <= repeats <= 100 or not 0 <= warmup <= 10:
         raise ValueError("Use 1 through 100 measured passes and 0 through 10 warmup passes.")
     if type(exclude_self_matches) is not bool:
         raise ValueError("exclude_self_matches must be true or false.")
+    if not isinstance(expected_missing_qrel_docs, (list, tuple)):
+        raise ValueError("expected_missing_qrel_docs must be a list of document IDs.")
+    validate_ranking(list(expected_missing_qrel_docs), 10000)
     paths = dataset_paths(dataset, split)
     initial = {name: digest(path) for name, path in paths.items()}
     queries, qrels = load_queries(paths["queries"]), load_qrels(paths["qrels"])
@@ -93,7 +97,9 @@ def run(
     initial_engine = engine.identity()
     rankings, samples, repeat_evaluations = {}, [], []
     randomizer = random.Random(seed)
-    with validate_corpus(paths["corpus"], qrels, Path(cache).parent) as (check_ids, count):
+    with validate_corpus(
+        paths["corpus"], qrels, Path(cache).parent, expected_missing_qrel_docs
+    ) as (check_ids, count):
         artifact, build = ensure_artifact(engine, paths["corpus"], cache)
         artifacts_before = dict(build["files"])
         with engine.open(artifact) as search:
@@ -156,6 +162,7 @@ def run(
             "files": initial,
             "split": split,
             "documents": count,
+            "missing_judged_documents": sorted(expected_missing_qrel_docs),
             "provenance": json.loads(provenance.read_text()) if provenance.is_file() else None,
         },
         "machine": machine(),

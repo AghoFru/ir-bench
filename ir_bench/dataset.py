@@ -124,7 +124,7 @@ def dataset_paths(directory, split="test"):
 
 
 @contextmanager
-def validate_corpus(corpus, qrels, work):
+def validate_corpus(corpus, qrels, work, expected_missing_qrel_docs=()):
     """Keep document identity validation on disk so large corpora do not fill RAM."""
     work = Path(work)
     work.mkdir(parents=True, exist_ok=True)
@@ -143,15 +143,23 @@ def validate_corpus(corpus, qrels, work):
             if not count:
                 raise ValueError("The corpus is empty.")
 
+            def exists(doc_id):
+                return (
+                    connection.execute("SELECT 1 FROM ids WHERE id=?", (doc_id,)).fetchone()
+                    is not None
+                )
+
             def check(ids):
                 for doc_id in ids:
-                    if (
-                        connection.execute("SELECT 1 FROM ids WHERE id=?", (doc_id,)).fetchone()
-                        is None
-                    ):
+                    if not exists(doc_id):
                         raise ValueError(f"Unknown corpus document identifier: {doc_id}")
 
-            check(row.doc_id for row in qrels)
+            missing = {doc_id for doc_id in {row.doc_id for row in qrels} if not exists(doc_id)}
+            if missing != set(expected_missing_qrel_docs):
+                raise ValueError(
+                    "Missing judged documents differ from expected_missing_qrel_docs: "
+                    f"{sorted(missing)[:10]}"
+                )
             yield check, count
         finally:
             connection.close()

@@ -52,6 +52,13 @@ def main(argv=None):
     live.add_argument("--repeats", type=int, default=1)
     live.add_argument("--warmup", type=int, default=0)
     live.add_argument("--seed", type=int, default=0)
+    live.add_argument(
+        "--missing-qrel-doc",
+        action="append",
+        default=[],
+        dest="expected_missing_qrel_docs",
+        help="Declare an expected absent judged document. Retain its judgments when scoring.",
+    )
     live.add_argument("--output", required=True, type=Path)
     live.add_argument("--run-output", type=Path, help="Export the rankings in TREC format.")
     offline = commands.add_parser(
@@ -91,6 +98,7 @@ def main(argv=None):
                 warmup=arguments.warmup,
                 seed=arguments.seed,
                 exclude_self_matches=arguments.exclude_self_matches,
+                expected_missing_qrel_docs=arguments.expected_missing_qrel_docs,
             )
             report["configuration"] = config
             report["dataset_source"] = arguments.dataset

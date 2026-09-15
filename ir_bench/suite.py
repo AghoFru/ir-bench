@@ -34,7 +34,14 @@ def run_suite(config, work, output):
         ):
             raise ValueError("Use unique names with letters, numbers, underscores, or hyphens.")
     for entry in datasets:
-        if set(entry) - {"name", "source", "split", "doc_fields", "query_fields"}:
+        if set(entry) - {
+            "name",
+            "source",
+            "split",
+            "doc_fields",
+            "query_fields",
+            "expected_missing_qrel_docs",
+        }:
             raise ValueError("Unknown dataset configuration field.")
     for entry in engines:
         if set(entry) - {"name", "adapter", "config", "runs"}:
@@ -89,7 +96,16 @@ def run_suite(config, work, output):
                         )
                         if key in config
                     }
-                    report = run(engine, dataset, work / "cache", split=split, **options)
+                    report = run(
+                        engine,
+                        dataset,
+                        work / "cache",
+                        split=split,
+                        expected_missing_qrel_docs=dataset_config.get(
+                            "expected_missing_qrel_docs", ()
+                        ),
+                        **options,
+                    )
                 filename = f"{row['dataset']}/{row['engine']}.json"
                 report["configuration"] = {"dataset": dataset_config, "engine": engine_config}
                 write_report(output / filename, report)

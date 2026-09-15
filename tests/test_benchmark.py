@@ -15,6 +15,7 @@ from ir_measures import Qrel
 
 from ir_bench.adapters import Sift, SQLiteFTS5
 from ir_bench.cache import cache_key, ensure_artifact
+from ir_bench.dataset import load_qrels, validate_corpus
 from ir_bench.metrics import evaluate as evaluate_run
 from ir_bench.run import evaluate_file, latency_report, run
 from ir_bench.trec import write_run
@@ -117,6 +118,34 @@ class BenchmarkTest(unittest.TestCase):
         self.assertEqual(empty["metrics"]["nDCG@1"], 0)
         with self.assertRaisesRegex(ValueError, "true or false"):
             run(SQLiteFTS5({}), self.dataset, cache, exclude_self_matches="false")
+
+    def test_declared_missing_judgments_still_contribute_to_scores(self):
+        qrels = self.dataset / "qrels/test.tsv"
+        qrels.write_text("q1 0 cat 1\nq1 0 missing 1\nq2 0 missing 1\n")
+        with self.assertRaisesRegex(ValueError, "Missing judged documents"):
+            run(SQLiteFTS5({}), self.dataset, self.work / "cache")
+        report = run(
+            SQLiteFTS5({}),
+            self.dataset,
+            self.work / "cache",
+            expected_missing_qrel_docs=["missing"],
+        )
+        self.assertEqual(report["query_count"], 2)
+        self.assertEqual(report["metrics"]["R@100"], 0.25)
+        self.assertEqual(report["dataset"]["missing_judged_documents"], ["missing"])
+        self.assertEqual(report["per_query"]["q2"]["nDCG@10"], 0)
+        with validate_corpus(
+            self.dataset / "corpus.jsonl", load_qrels(qrels), self.work, ["missing"]
+        ) as (check, _):
+            with self.assertRaisesRegex(ValueError, "Unknown corpus"):
+                check(["missing"])
+        with self.assertRaisesRegex(ValueError, "Missing judged documents"):
+            run(
+                SQLiteFTS5({}),
+                self.dataset,
+                self.work / "cache",
+                expected_missing_qrel_docs=["missing", "unexpected"],
+            )
 
     def test_corrupt_artifact_is_rejected(self):
         engine = SQLiteFTS5({})
