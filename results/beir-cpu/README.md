@@ -1,17 +1,18 @@
 # CPU retrieval on a BEIR subset
 
 Results across SciFact, NFCorpus, and ArguAna, with each dataset weighted equally.
-Apple M1 Ultra, CPU only. Higher nDCG@10 means better relevance. Lower times are better.
+Apple M1 Ultra, CPU only. Higher nDCG@10 and Recall@100 are better. Lower times are better.
 
-| System | Mean nDCG@10 | Median query latency | Median ingestion |
-|---|---:|---:|---:|
-| Sift | 0.493 | 0.83 ms | 2.72 s |
-| BM25 (Terrier) | 0.501 | 4.05 ms | 1.48 s |
-| BGE-small | 0.553 | 14.09 ms | 175.42 s |
-| SPLADE | 0.523 | 36.48 ms | 379.67 s |
-| Weaviate hybrid (E5 + BM25) | 0.514 | 20.77 ms | 181.27 s |
+| System | Mean nDCG@10 | Mean Recall@100 | Median query latency | Median ingestion |
+|---|---:|---:|---:|---:|
+| Sift | 0.493 | 0.708 | 0.83 ms | 2.72 s |
+| BM25 (Terrier) | 0.501 | 0.715 | 4.05 ms | 1.48 s |
+| BGE-small | 0.553 | 0.747 | 14.09 ms | 175.42 s |
+| SPLADE | 0.523 | 0.740 | 36.48 ms | 379.67 s |
+| Weaviate hybrid (E5 + BM25) | 0.514 | 0.742 | 20.77 ms | 181.27 s |
 
-The nDCG@10 summary is the mean of each dataset's mean query score.
+Relevance summaries average each dataset's mean query score.
+Recall@100 measures the share of relevant documents found in the first 100 results.
 Query latency is the median of each dataset's median query latency.
 Ingestion is the median of the full index build times for the three datasets.
 
@@ -21,37 +22,37 @@ Ingestion is the median of the full index build times for the three datasets.
 
 5,183 documents and 300 judged queries.
 
-| System | nDCG@10 | p50 latency | p95 latency | Ingestion |
-|---|---:|---:|---:|---:|
-| Sift | 0.696 | 0.83 ms | 1.14 ms | 2.72 s |
-| BM25 (Terrier) | 0.684 | 4.05 ms | 4.83 ms | 0.98 s |
-| BGE-small | 0.713 | 14.09 ms | 16.46 ms | 175.42 s |
-| SPLADE | 0.708 | 36.48 ms | 41.72 ms | 379.67 s |
-| Weaviate hybrid (E5 + BM25) | 0.723 | 20.77 ms | 24.16 ms | 181.27 s |
+| System | nDCG@10 | Recall@100 | p50 latency | p95 latency | Ingestion |
+|---|---:|---:|---:|---:|---:|
+| Sift | 0.696 | 0.926 | 0.83 ms | 1.14 ms | 2.72 s |
+| BM25 (Terrier) | 0.684 | 0.926 | 4.05 ms | 4.83 ms | 0.98 s |
+| BGE-small | 0.713 | 0.942 | 14.09 ms | 16.46 ms | 175.42 s |
+| SPLADE | 0.708 | 0.949 | 36.48 ms | 41.72 ms | 379.67 s |
+| Weaviate hybrid (E5 + BM25) | 0.723 | 0.955 | 20.77 ms | 24.16 ms | 181.27 s |
 
 ### NFCorpus
 
 3,633 documents and 323 judged queries.
 
-| System | nDCG@10 | p50 latency | p95 latency | Ingestion |
-|---|---:|---:|---:|---:|
-| Sift | 0.332 | 0.56 ms | 0.75 ms | 2.36 s |
-| BM25 (Terrier) | 0.328 | 3.45 ms | 4.48 ms | 1.48 s |
-| BGE-small | 0.343 | 12.57 ms | 14.75 ms | 131.56 s |
-| SPLADE | 0.352 | 35.36 ms | 39.78 ms | 273.68 s |
-| Weaviate hybrid (E5 + BM25) | 0.340 | 18.62 ms | 20.84 ms | 123.17 s |
+| System | nDCG@10 | Recall@100 | p50 latency | p95 latency | Ingestion |
+|---|---:|---:|---:|---:|---:|
+| Sift | 0.332 | 0.253 | 0.56 ms | 0.75 ms | 2.36 s |
+| BM25 (Terrier) | 0.328 | 0.248 | 3.45 ms | 4.48 ms | 1.48 s |
+| BGE-small | 0.343 | 0.311 | 12.57 ms | 14.75 ms | 131.56 s |
+| SPLADE | 0.352 | 0.289 | 35.36 ms | 39.78 ms | 273.68 s |
+| Weaviate hybrid (E5 + BM25) | 0.340 | 0.305 | 18.62 ms | 20.84 ms | 123.17 s |
 
 ### ArguAna
 
 8,674 documents and 1,406 judged queries.
 
-| System | nDCG@10 | p50 latency | p95 latency | Ingestion |
-|---|---:|---:|---:|---:|
-| Sift | 0.449 | 2.03 ms | 3.27 ms | 4.77 s |
-| BM25 (Terrier) | 0.491 | 7.72 ms | 10.98 ms | 1.89 s |
-| BGE-small | 0.603 | 27.78 ms | 47.94 ms | 244.53 s |
-| SPLADE | 0.508 | 68.75 ms | 108.13 ms | 528.81 s |
-| Weaviate hybrid (E5 + BM25) | 0.478 | 41.32 ms | 66.73 ms | 249.41 s |
+| System | nDCG@10 | Recall@100 | p50 latency | p95 latency | Ingestion |
+|---|---:|---:|---:|---:|---:|
+| Sift | 0.449 | 0.945 | 2.03 ms | 3.27 ms | 4.77 s |
+| BM25 (Terrier) | 0.491 | 0.970 | 7.72 ms | 10.98 ms | 1.89 s |
+| BGE-small | 0.603 | 0.988 | 27.78 ms | 47.94 ms | 244.53 s |
+| SPLADE | 0.508 | 0.981 | 68.75 ms | 108.13 ms | 528.81 s |
+| Weaviate hybrid (E5 + BM25) | 0.478 | 0.966 | 41.32 ms | 66.73 ms | 249.41 s |
 
 ## Test settings
 
@@ -101,7 +102,7 @@ The suite report includes `dataset_medians` after every comparison succeeds.
 
 ## Evidence
 
-[CSV results](results.csv) contain unrounded per-dataset measurements.
+[CSV results](results.csv) contain unrounded per-dataset measurements, including Recall@100, MRR@10, and MAP@100.
 [Reports and TREC rankings](reports.zip) contain all 15 comparisons, dataset medians,
 per-query timings, model and input hashes, and configurations. Local paths use workspace placeholders.
 Every TREC export reproduces its report's relevance metrics with the same metric settings.
