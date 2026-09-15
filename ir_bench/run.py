@@ -77,6 +77,7 @@ def run(
     seed=0,
     exclude_self_matches=False,
     expected_missing_qrel_docs=(),
+    expected_documents=None,
 ):
     if not 1 <= repeats <= 100 or not 0 <= warmup <= 10:
         raise ValueError("Use 1 through 100 measured passes and 0 through 10 warmup passes.")
@@ -85,6 +86,10 @@ def run(
     if not isinstance(expected_missing_qrel_docs, (list, tuple)):
         raise ValueError("expected_missing_qrel_docs must be a list of document IDs.")
     validate_ranking(list(expected_missing_qrel_docs), 10000)
+    if expected_documents is not None and (
+        type(expected_documents) is not int or expected_documents < 1
+    ):
+        raise ValueError("expected_documents must be a positive integer.")
     paths = dataset_paths(dataset, split)
     initial = {name: digest(path) for name, path in paths.items()}
     queries, qrels = load_queries(paths["queries"]), load_qrels(paths["qrels"])
@@ -100,6 +105,8 @@ def run(
     with validate_corpus(
         paths["corpus"], qrels, Path(cache).parent, expected_missing_qrel_docs
     ) as (check_ids, count):
+        if expected_documents is not None and count != expected_documents:
+            raise ValueError(f"Expected {expected_documents} corpus documents, found {count}.")
         artifact, build = ensure_artifact(engine, paths["corpus"], cache)
         artifacts_before = dict(build["files"])
         with engine.open(artifact) as search:

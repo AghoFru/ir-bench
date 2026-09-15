@@ -1,17 +1,17 @@
 # CPU retrieval on a BEIR subset
 
-Medians across SciFact, NFCorpus, and ArguAna, with each dataset weighted equally.
+Results across SciFact, NFCorpus, and ArguAna, with each dataset weighted equally.
 Apple M1 Ultra, CPU only. Higher nDCG@10 means better relevance. Lower times are better.
 
-| System | Median nDCG@10 | Median query latency | Median ingestion |
+| System | Mean nDCG@10 | Median query latency | Median ingestion |
 |---|---:|---:|---:|
-| Sift | 0.449 | 0.83 ms | 2.72 s |
-| BM25 (Terrier) | 0.491 | 4.05 ms | 1.48 s |
-| BGE-small | 0.603 | 14.09 ms | 175.42 s |
-| SPLADE | 0.508 | 36.48 ms | 379.67 s |
-| Weaviate hybrid (E5 + BM25) | 0.478 | 20.77 ms | 181.27 s |
+| Sift | 0.493 | 0.83 ms | 2.72 s |
+| BM25 (Terrier) | 0.501 | 4.05 ms | 1.48 s |
+| BGE-small | 0.553 | 14.09 ms | 175.42 s |
+| SPLADE | 0.523 | 36.48 ms | 379.67 s |
+| Weaviate hybrid (E5 + BM25) | 0.514 | 20.77 ms | 181.27 s |
 
-The nDCG@10 summary is the median of each dataset's mean query score.
+The nDCG@10 summary is the mean of each dataset's mean query score.
 Query latency is the median of each dataset's median query latency.
 Ingestion is the median of the full index build times for the three datasets.
 
@@ -77,6 +77,7 @@ and recorded in each report.
 
 These results cover three small English datasets. They are not a full BEIR evaluation or
 an enterprise-scale throughput test. No failed comparison is omitted from an aggregate.
+See the [full BEIR comparison](../beir18-cpu) for coverage of all 18 tasks.
 
 ## Reproduce
 

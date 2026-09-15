@@ -71,6 +71,7 @@ def main(argv=None):
     matrix = commands.add_parser("suite", help="Run a dataset by engine matrix.")
     matrix.add_argument("config", type=Path)
     matrix.add_argument("--output", required=True, type=Path)
+    matrix.add_argument("--resume", action="store_true", help="Verify and reuse completed reports.")
     arguments = parser.parse_args(argv)
     work = arguments.work.resolve()
     os.environ.setdefault("HF_HOME", str(work / "huggingface"))
@@ -121,7 +122,12 @@ def main(argv=None):
         else:
             from .suite import run_suite
 
-            return run_suite(json.loads(arguments.config.read_text()), work, arguments.output)
+            return run_suite(
+                json.loads(arguments.config.read_text()),
+                work,
+                arguments.output,
+                resume=arguments.resume,
+            )
     except Exception as error:
         print(f"Benchmark failed: {error}", file=sys.stderr)
         return 1

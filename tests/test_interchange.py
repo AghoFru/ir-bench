@@ -23,7 +23,7 @@ from ir_bench.catalog import catalog, prepare, text_fields
 from ir_bench.dataset import dataset_paths, load_qrels
 from ir_bench.metrics import evaluate
 from ir_bench.run import evaluate_file, run, write_report
-from ir_bench.suite import dataset_medians, run_suite
+from ir_bench.suite import dataset_means, dataset_medians, run_suite
 from ir_bench.trec import read_run, write_run
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -208,6 +208,7 @@ class InterchangeTest(unittest.TestCase):
         report = json.loads((output / "suite.json").read_text())
         self.assertFalse(report["complete"])
         self.assertIsNone(report["dataset_medians"])
+        self.assertIsNone(report["dataset_means"])
         self.assertEqual([row["status"] for row in report["results"]], ["success", "failed"])
         with self.assertRaisesRegex(ValueError, "empty"):
             run_suite(config, self.work, output)
@@ -267,6 +268,110 @@ class InterchangeTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             write_report(path, {"value": float("nan")})
         self.assertEqual(json.loads(path.read_text()), {"value": 1})
+
+    def test_grouped_mean_weights_datasets_once_and_retains_build_and_query_costs(self):
+        summary = {
+            "complete": True,
+            "configuration": {
+                "datasets": [
+                    {"name": "a", "group": "forums"},
+                    {"name": "b", "group": "forums"},
+                    {"name": "c"},
+                ],
+                "engines": [{"name": "system"}],
+            },
+            "results": [],
+        }
+        for name, score, samples in [("a", 0.2, [1, 3]), ("b", 0.6, [8]), ("c", 1.0, [20])]:
+            write_report(
+                self.work / f"{name}.json",
+                {
+                    "metrics": {"nDCG@10": score},
+                    "latency": {
+                        "p50_us": sum(samples) / len(samples),
+                        "mean_us": sum(samples) / len(samples),
+                        "observations": [{"latency_us": sample} for sample in samples],
+                    },
+                    "build": {"build_seconds": 10},
+                },
+            )
+            summary["results"].append(
+                {
+                    "dataset": name,
+                    "engine": "system",
+                    "status": "success",
+                    "report": f"{name}.json",
+                }
+            )
+        result = dataset_means(summary, self.work)
+        self.assertEqual(result["datasets"], ["forums", "c"])
+        self.assertEqual(result["groups"], {"forums": ["a", "b"], "c": ["c"]})
+        self.assertAlmostEqual(result["engines"]["system"]["metrics"]["nDCG@10"], 0.7)
+        self.assertEqual(result["engines"]["system"]["mean_us"], 12)
+        self.assertEqual(result["engines"]["system"]["p50_us"], 11.5)
+        self.assertEqual(result["engines"]["system"]["ingestion_seconds"], 15)
+        summary["results"].pop()
+        with self.assertRaisesRegex(ValueError, "every dataset"):
+            dataset_means(summary, self.work)
+
+    def test_suite_resume_preserves_verified_results_and_rejects_changed_inputs(self):
+        output = self.work / "resume"
+        config = {
+            "datasets": [{"name": "tiny", "source": str(self.dataset)}],
+            "engines": [{"name": "sqlite", "adapter": "sqlite"}],
+        }
+        self.assertEqual(run_suite(config, self.work, output), 0)
+        original = digest(output / "tiny/sqlite.json")
+        self.assertEqual(run_suite(config, self.work, output, resume=True), 0)
+        self.assertEqual(digest(output / "tiny/sqlite.json"), original)
+        changed = {**config, "repeats": 2}
+        with self.assertRaisesRegex(ValueError, "original suite"):
+            run_suite(changed, self.work, output, resume=True)
+        queries = self.dataset / "queries.jsonl"
+        queries.write_text(queries.read_text() + "\n")
+        self.assertEqual(run_suite(config, self.work, output, resume=True), 1)
+        summary = json.loads((output / "suite.json").read_text())
+        self.assertIsNone(summary["dataset_means"])
+        self.assertIn("inputs changed", summary["results"][0]["error"])
+
+    def test_beir_preset_contains_all_eighteen_tasks_and_twelve_cqadupstack_subsets(self):
+        config = json.loads((ROOT / "examples/beir18.json").read_text())
+        groups = {entry.get("group", entry["name"]) for entry in config["datasets"]}
+        self.assertEqual(
+            groups,
+            {
+                "trec-covid",
+                "bioasq",
+                "nfcorpus",
+                "nq",
+                "hotpotqa",
+                "fiqa",
+                "signal1m",
+                "trec-news",
+                "robust04",
+                "arguana",
+                "webis-touche2020",
+                "cqadupstack",
+                "quora",
+                "dbpedia-entity",
+                "scidocs",
+                "fever",
+                "climate-fever",
+                "scifact",
+            },
+        )
+        self.assertEqual(len(config["datasets"]), 29)
+        self.assertEqual(
+            sum(entry.get("group") == "cqadupstack" for entry in config["datasets"]),
+            12,
+        )
+        self.assertEqual(len(config["engines"]), 5)
+        self.assertTrue(all(entry["expected_documents"] > 0 for entry in config["datasets"]))
+
+    def test_expected_corpus_size_rejects_a_subset_before_indexing(self):
+        with self.assertRaisesRegex(ValueError, "Expected 4 corpus documents, found 3"):
+            run(SQLiteFTS5({}), self.dataset, self.work / "cache", expected_documents=4)
+        self.assertFalse((self.work / "cache").exists())
 
     @unittest.skipUnless(
         os.environ.get("IR_BENCH_LIVE"), "Set IR_BENCH_LIVE=1 for catalog and Java checks."

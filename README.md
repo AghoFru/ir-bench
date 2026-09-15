@@ -31,8 +31,9 @@ The BM25 baseline requires Java 11 or later:
 .venv/bin/ir-bench suite examples/matrix.json --output work/comparison
 ```
 
-The suite report includes dataset medians for relevance, query latency, and ingestion.
-Results go into the output directory. Use a new directory for each comparison.
+The suite report includes dataset means and medians for relevance, query latency, and ingestion.
+See the [18-task BEIR comparison](results/beir18-cpu) for the full benchmark setup.
+Results go into the output directory. Add `--resume` to verify and reuse completed comparisons.
 See [example configurations](examples/) for other integrations.
 
 ## Benchmark Weaviate
