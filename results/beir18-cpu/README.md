@@ -10,7 +10,8 @@ CQADupStack contains 12 subsets, so the matrix has 29 corpora and 145 comparison
 
 ## Metrics
 
-Mean nDCG@10 gives each task equal weight. CQADupStack contributes the mean of its 12 subset scores.
+Mean nDCG@10 and Recall@100 give each task equal weight.
+CQADupStack contributes the mean of its 12 subset scores.
 All judged queries contribute to each subset score. No failed or missing comparison enters a full-suite mean.
 Query times include encoding and adapter overhead. Ingestion includes document encoding and index writes.
 Within CQADupStack, latency uses all query observations and ingestion sums all 12 index builds.
@@ -29,6 +30,14 @@ to obtain these corpora. IR Bench downloads the other datasets through `ir_datas
 ```sh
 OMP_NUM_THREADS=4 TOKENIZERS_PARALLELISM=false .venv/bin/ir-bench \
   suite examples/beir18.json --output work/beir18-results
+```
+
+On macOS ARM64, use one OpenMP runtime for PyTorch and FAISS to prevent native crashes or deadlocks.
+Set this variable before the suite command:
+
+```sh
+export DYLD_LIBRARY_PATH="$(.venv/bin/python -c \
+  'from pathlib import Path; import torch; print(Path(torch.__file__).parent / "lib")')"
 ```
 
 Add `--resume` to the same command after an interruption. Completed reports must match their checksums,
